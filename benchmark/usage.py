@@ -49,7 +49,6 @@ def profile_linear_layers():
     out_features = 512
     num_runs = 100
 
-    # Generate random float32 data
     x_fp32 = torch.randn(batch_size, in_features)
     w_fp32 = torch.randn(out_features, in_features)
     b_fp32 = torch.randn(out_features)
@@ -88,7 +87,6 @@ def profile_linear_layers():
     benchmark(packed_layer, x_q, "PackedLinear (int4)")
     benchmark(quant_layer, x_fp32, "QuantizedLinear (int8)")
 
-    # Output similarity check (optional)
     out_int4 = packed_layer(x_q)
     out_int8 = quant_layer(x_fp32)
     diff = torch.mean((out_int4.float() - out_int8.float()).abs()).item()

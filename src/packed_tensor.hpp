@@ -6,7 +6,6 @@
 #include <type_traits>
 #include <stdexcept>
 #include <limits>
-#include <immintrin.h> // For AVX2/AVX-512 instructions
 
 namespace BitTensor {
 
@@ -79,11 +78,9 @@ namespace detail {
     }
 }
 
-// Forward declaration
 template<typename T = uint8_t>
 class PackedTensor;
 
-// Template class definition
 template<typename T>
 class PackedTensor {
     static_assert(std::is_integral<T>::value && sizeof(T) == 1,
@@ -92,7 +89,6 @@ class PackedTensor {
 public:
     PackedTensor() = default;
     
-    // Create from shape
     PackedTensor(const std::vector<int64_t>& shape);
 
     T operator()(const std::vector<int64_t>& indices) const;
@@ -108,41 +104,6 @@ public:
     // Linear access methods
     T get_linear(size_t idx) const;
     void set_linear(size_t idx, T value);
-
-    // Efficient bulk operations using templates
-    void pack_values(const T* values, size_t count) {
-        const size_t num_words = (count + detail::ELEMENTS_PER_WORD - 1) / detail::ELEMENTS_PER_WORD;
-        for (size_t i = 0; i < num_words; ++i) {
-            const size_t start_idx = i * detail::ELEMENTS_PER_WORD;
-            const size_t end_idx = std::min(start_idx + detail::ELEMENTS_PER_WORD, count);
-            uint8_t word_values[16] = {0};  // Initialize with zeros
-            
-            // Copy values for this word
-            for (size_t j = start_idx; j < end_idx; ++j) {
-                word_values[j - start_idx] = values[j] & 0xF;
-            }
-            
-            // Pack the values using template-based packing
-            data_[i] = detail::pack_16_values_impl(word_values);
-        }
-    }
-
-    void unpack_values(T* values, size_t count) const {
-        const size_t num_words = (count + detail::ELEMENTS_PER_WORD - 1) / detail::ELEMENTS_PER_WORD;
-        for (size_t i = 0; i < num_words; ++i) {
-            const size_t start_idx = i * detail::ELEMENTS_PER_WORD;
-            const size_t end_idx = std::min(start_idx + detail::ELEMENTS_PER_WORD, count);
-            uint8_t word_values[16];
-            
-            // Unpack the values using template-based unpacking
-            detail::unpack_16_values_impl(data_[i], word_values);
-            
-            // Copy unpacked values
-            for (size_t j = start_idx; j < end_idx; ++j) {
-                values[j] = word_values[j - start_idx];
-            }
-        }
-    }
 
 private:
     size_t compute_linear_index(const std::vector<int64_t>& indices) const;

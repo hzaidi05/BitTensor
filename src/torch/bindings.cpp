@@ -7,19 +7,13 @@
 namespace BitTensor {
 namespace torch {
 
-// Pack weights for a linear layer using packed_tensor.hpp functionality
-// Input: weight tensor of shape [out_features, in_features] with values 0-15
-// Output: packed tensor of shape [out_features, in_features/16] with 16 values packed into each element
 at::Tensor pack_weights(const at::Tensor& weight) {
-    // Ensure weight is contiguous and on CPU
     auto weight_cpu = weight.contiguous().cpu();
     
-    // Verify weight is quantized to int4
     if (weight_cpu.scalar_type() != at::ScalarType::Byte) {
         throw std::runtime_error("Weight must be quantized to uint8 (int4) before packing");
     }
     
-    // Verify weight dimensions
     if (weight_cpu.dim() != 2) {
         throw std::runtime_error("Weight must be 2D tensor [out_features, in_features]");
     }
@@ -31,7 +25,6 @@ at::Tensor pack_weights(const at::Tensor& weight) {
     PackedTensor<uint8_t> packed({out_features, num_words});
 
     
-    // Get raw data pointer
     auto* data = weight_cpu.data_ptr<uint8_t>();
     
     // For each output feature
@@ -39,16 +32,14 @@ at::Tensor pack_weights(const at::Tensor& weight) {
         // Pack 16 input features at a time
         const int64_t num_words = (in_features + 15) / 16;
         for (int64_t j = 0; j < num_words; ++j) {
-            uint8_t values[16] = {0};  // Initialize with zeros
+            uint8_t values[16] = {0};
             const int64_t start_idx = j * 16;
             const int64_t end_idx = std::min(start_idx + 16, in_features);
             
-            // Copy values for this word
             for (int64_t k = start_idx; k < end_idx; ++k) {
-                values[k - start_idx] = data[i * in_features + k] & 0xF;  // Only use lower 4 bits
+                values[k - start_idx] = data[i * in_features + k] & 0xF;
             }
             
-            // Pack the 16 values into a word using packed_tensor.hpp
             packed.data()[i * num_words + j] = detail::pack_16_values_impl(values);
         }
     }
@@ -56,25 +47,18 @@ at::Tensor pack_weights(const at::Tensor& weight) {
     // Create output tensor with packed data
     auto options = at::TensorOptions().dtype(at::ScalarType::Long).device(at::kCPU);
 
-    // The packed tensor's data is 16x smaller in the last dimension
     std::vector<int64_t> packed_shape = {out_features, (in_features + 15) / 16};
     auto packed_tensor = at::empty(packed_shape, options);
     auto* packed_data = packed_tensor.data_ptr<uint64_t>();
     
-    // Copy packed data to output tensor
     std::memcpy(packed_data, packed.data(), packed.data_size() * sizeof(uint64_t));
     
     return packed_tensor;
 }
 
-// Unpack weights from packed format back to original form
-// Input: packed tensor of shape [out_features, in_features/16] with 16 values packed into each element
-// Output: tensor of shape [out_features, in_features] with values 0-15
 at::Tensor unpack_weights(const at::Tensor& packed_weights, int64_t in_features) {
-    // Ensure packed weights are contiguous and on CPU
     auto packed_cpu = packed_weights.contiguous().cpu();
     
-    // Verify packed weights dimensions
     if (packed_cpu.dim() != 2) {
         throw std::runtime_error("Packed weights must be 2D tensor [out_features, in_features/16]");
     }
@@ -82,25 +66,20 @@ at::Tensor unpack_weights(const at::Tensor& packed_weights, int64_t in_features)
     const int64_t out_features = packed_cpu.size(0);
     const int64_t num_words = packed_cpu.size(1);
     
-    // Verify dimensions match
     if (num_words != (in_features + 15) / 16) {
         throw std::runtime_error("Packed weights dimensions do not match in_features");
     }
     
-    // Create output tensor
     auto options = at::TensorOptions()
-        .dtype(at::ScalarType::Byte)  // Unpacked values are uint8 (int4)
+        .dtype(at::ScalarType::Byte)
         .device(at::kCPU);
     
     auto output = at::empty({out_features, in_features}, options);
     auto* output_data = output.data_ptr<uint8_t>();
     
-    // Get packed data pointer
     auto* packed_data = packed_cpu.data_ptr<uint64_t>();
     
-    // For each output feature
     for (int64_t i = 0; i < out_features; ++i) {
-        // Unpack 16 input features at a time
         for (int64_t j = 0; j < num_words; ++j) {
             uint8_t values[16];
             detail::unpack_16_values_impl(packed_data[i * num_words + j], values);
@@ -108,7 +87,6 @@ at::Tensor unpack_weights(const at::Tensor& packed_weights, int64_t in_features)
             const int64_t start_idx = j * 16;
             const int64_t end_idx = std::min(start_idx + 16, in_features);
             
-            // Copy unpacked values to output
             for (int64_t k = start_idx; k < end_idx; ++k) {
                 output_data[i * in_features + k] = values[k - start_idx];
             }
@@ -118,12 +96,7 @@ at::Tensor unpack_weights(const at::Tensor& packed_weights, int64_t in_features)
     return output;
 }
 
-// Perform packed matrix multiplication using packed_tensor.hpp functionality
-// Input: 
-//   - input tensor of shape [batch_size, in_features] with values 0-15
-//   - packed_weights tensor of shape [out_features, in_features/16] (packed)
-//   - bias tensor of shape [out_features] with values 0-15 (optional)
-// Output: tensor of shape [batch_size, out_features] with values 0-15
+
 at::Tensor packed_matmul(const at::Tensor& input, const at::Tensor& packed_weights, const at::Tensor& bias) {
     // Ensure input is contiguous and on CPU
     auto input_cpu = input.contiguous().cpu();
@@ -145,11 +118,9 @@ at::Tensor packed_matmul(const at::Tensor& input, const at::Tensor& packed_weigh
         throw std::runtime_error("Packed weights dimensions do not match input features");
     }
     
-    // Create packed input tensor
     PackedTensor<uint8_t> packed_input({batch_size, in_features});
     auto* input_data = input_cpu.data_ptr<uint8_t>();
     
-    // Pack input data
     for (int64_t b = 0; b < batch_size; ++b) {
         const int64_t num_words = (in_features + 15) / 16;
         for (int64_t j = 0; j < num_words; ++j) {
@@ -165,35 +136,29 @@ at::Tensor packed_matmul(const at::Tensor& input, const at::Tensor& packed_weigh
         }
     }
     
-    // Create packed weights tensor
     int64_t num_words = (in_features + 15) / 16;
     PackedTensor<uint8_t> packed_w({out_features, num_words});
 
     auto* packed_w_data = packed_weights.data_ptr<uint64_t>();
     std::memcpy(packed_w.data(), packed_w_data, packed_weights.numel() * sizeof(uint64_t));
     
-    // Create output tensor
     auto options = at::TensorOptions()
-        .dtype(at::ScalarType::Long)  // Output is packed uint64_t
+        .dtype(at::ScalarType::Long)
         .device(at::kCPU);
     
     auto output = at::empty({batch_size, out_features}, options);
     auto* output_data = output.data_ptr<uint64_t>();
     
-    // Create packed output tensor
     PackedTensor<uint8_t> packed_output({batch_size, out_features});
     
-    // Get bias data pointer (nullptr if bias is empty)
     uint8_t* bias_data = nullptr;
     if (bias.numel() > 0) {
         auto bias_cpu = bias.contiguous().cpu();
         bias_data = bias_cpu.data_ptr<uint8_t>();
     }
     
-    // Use packed_tensor.hpp's packed_gemm
     BitTensor::packed_gemm(packed_input, packed_w, packed_output, bias_data);
     
-    // Copy results back to output tensor
     std::memcpy(output_data, packed_output.data(), packed_output.data_size() * sizeof(uint64_t));
     
     return output;

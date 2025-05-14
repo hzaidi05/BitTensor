@@ -6,6 +6,7 @@ Modern deep learning models are increasingly being quantized to reduce memory us
 
 1. Packing 16 int4 values into a single int64 word, enabling vectorized loads
 2. Using template metaprogramming for compile-time optimizations
+3. Cache-aware blocked GEMMs (with fused bias)
 3. Providing a seamless PyTorch integration through C++ extensions
 
 This approach allows for efficient int4 inference on CPUs, with potential memory savings of up to 16x compared to float32.
@@ -48,6 +49,6 @@ output = layer(x)
 - [ ] Add `torch.compile` integration for it to go brr
 - [ ] Add int4 inference example with MNIST
 - [ ] SIMD optimizations
-- [ ] More operations and fused kernels
+- [ ] More operations and better fused kernels
 
 Performance results coming soon!
