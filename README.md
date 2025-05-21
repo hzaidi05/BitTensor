@@ -2,14 +2,14 @@
 
 A high-performance C++ library for bit-packed tensor operations, with PyTorch integration for efficient int4 inference on CPUs.
 
-Modern deep learning models are increasingly being quantized to reduce memory usage and improve inference speed on consumer/edge devices. While GPUs have excellent support for int8 operations, CPUs often lack efficient int4 support. BitTensor addresses this by:
+Quantization is a common approach to reduce memory usage and improve inference speed on consumer/edge devices for DL models. While GPUs have excellent support for int8 operations, CPUs often lack efficient low-precision support. BitTensor addresses this by:
 
 1. Packing 16 int4 values into a single int64 word, enabling vectorized loads
 2. Using template metaprogramming for compile-time optimizations
-3. Cache-aware blocked GEMMs (with fused bias)
-3. Providing a seamless PyTorch integration through C++ extensions
+3. Cache-aware blocked GEMMs (with fused ops)
+4. Integrating straight into PyTorch!
 
-This approach allows for efficient int4 inference on CPUs, with potential memory savings of up to 16x compared to float32.
+This extensions allows for efficient int4 inference on CPUs, with potential memory savings of up to 16x compared to float32.
 
 ## Basic Usage
 
